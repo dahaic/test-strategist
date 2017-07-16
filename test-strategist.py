@@ -1,7 +1,21 @@
 #!/usr/bin/env python2
+
+#   Copyright (c) 2017 Red Hat, Inc. All rights reserved.
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import argparse
 import copy
-import sys
 import yaml
 
 
@@ -60,7 +74,8 @@ class Project(object):
         prev_size = 0
         while prev_size != len(impacted_parts):
             for part in self.parts:
-                if impacted_parts & self.parts[part].influencers:
+                if impacted_parts & self.parts[part].influencers or \
+                   'EVERYTHING' in self.parts[part].influencers:
                     impacted_parts.add(part)
             prev_size = len(impacted_parts)
         return impacted_parts
@@ -81,6 +96,9 @@ def yaml_loader(filepath, project):
 
 
 parser = argparse.ArgumentParser()
+parser.description = ('Evaluates influence tree provided within project yaml '
+                      'file, and prints out impacted parts and tests to cover '
+                      'them, based on list of changed parts from command line')
 parser.add_argument('-p', '--project-file', dest='project_file', required=True)
 parser.add_argument('changes', nargs=argparse.REMAINDER)
 options = parser.parse_args()
