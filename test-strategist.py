@@ -100,6 +100,7 @@ parser.description = ('Evaluates influence tree provided within project yaml '
                       'file, and prints out impacted parts and tests to cover '
                       'them, based on list of changed parts from command line')
 parser.add_argument('-p', '--project-file', dest='project_file', required=True)
+parser.add_argument('--nice', dest='nice_output', action="store_true")
 parser.add_argument('changes', nargs=argparse.REMAINDER)
 options = parser.parse_args()
 
@@ -109,5 +110,9 @@ if __name__ == "__main__":
     changes = options.changes
     impact = project.impact(changes)
     to_test = project.needed_tests(impact)
-    print("List of impacted parts: {0}".format(", ".join(impact)))
-    print("Tests to run: {0}".format(", ".join(to_test)))
+    if options.nice_output:
+        separator = '\n'
+    else:
+        separator = ', '
+    print("List of impacted parts: {0}".format(separator.join(impact)))
+    print("Tests to run: {0}".format(separator.join(to_test)))
