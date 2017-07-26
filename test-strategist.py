@@ -16,6 +16,8 @@
 
 import argparse
 import copy
+import string
+import sys
 import yaml
 
 
@@ -86,6 +88,45 @@ class Project(object):
             tests |= self.parts[part].tests
         return tests
 
+    def generate_dot_string(self, dot_file):
+        def normalize(name):
+            translation_table = string.maketrans(' -.|()*',
+                                                 '_______')
+            new_name = name.split(' - ')[-1]
+            return string.translate(new_name, translation_table)
+
+        dot_string = 'strict digraph "influence map" {\n'
+        for part in self.parts:
+            if "EVERYTHING" in self.parts[part].influencers:
+                # let's make it special shape, and leave it as that
+                # arrows would be ugly
+                dot_string += "{0} [shape = box]".format(
+                                          normalize(self.parts[part].name))
+                continue  # EVERYTHING means we are done
+            for influencer in self.parts[part].influencers:
+                try:
+                    self.parts[influencer].influencing |= set([part])
+                except AttributeError:
+                    self.parts[influencer].influencing = set([part])
+
+        for part in self.parts:
+            part_display_name = normalize(self.parts[part].name)
+            try:
+                influencing_display_names = map(lambda x: normalize(x),
+                                                self.parts[part].influencing)
+                if len(influencing_display_names) == 1:
+                    dot_string += "{0} -> {1};\n".format(part_display_name,
+                                           " ".join(influencing_display_names))
+                else:
+                    dot_string += "{0} -> {{{1}}};\n".format(part_display_name,
+                                           " ".join(influencing_display_names))
+            except AttributeError:
+                # this node is not influencing anything
+                dot_string += "{0};\n".format(part_display_name)
+        dot_string += "}"
+        with open(dot_file, 'w') as output_file:
+            output_file.write(dot_string)
+
 
 def yaml_loader(filepath, project):
     with open(filepath, 'r') as yaml_file:
@@ -100,15 +141,21 @@ parser.description = ('Evaluates influence tree provided within project yaml '
                       'file, and prints out impacted parts and tests to cover '
                       'them, based on list of changed parts from command line')
 parser.add_argument('-p', '--project-file', dest='project_file', required=True)
-parser.add_argument('--nice', dest='nice_output', action="store_true")
+parser.add_argument('--nice', dest='nice_output', action="store_true",
+                    help="Formats output to be readable by human")
+parser.add_argument('--dot', dest='dot_file',
+                    help=("Generates dot file to be "
+                          "used by graphwiz generator"))
 parser.add_argument('changes', nargs=argparse.REMAINDER)
 options = parser.parse_args()
 
 if __name__ == "__main__":
     project = Project()
     yaml_loader(options.project_file, project)
-    changes = options.changes
-    impact = project.impact(changes)
+    if options.dot_file:
+        dot_string = project.generate_dot_string(options.dot_file)
+        sys.exit()
+    impact = project.impact(options.changes)
     to_test = project.needed_tests(impact)
     if options.nice_output:
         separator = '\n'
