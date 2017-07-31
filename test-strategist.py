@@ -85,6 +85,19 @@ class Project(object):
             impacted[impacted_part] = self.parts[impacted_part]
         return impacted
 
+    def influence(self, influenced_parts):
+        influenced = {}
+        for part in influenced_parts:
+            influenced[part] = self.parts[part]
+        prev_size = 0
+        while prev_size != len(influenced):
+            prev_size = len(influenced)
+            for part in influenced.keys()[:]:
+                for influencer in self.parts[part].influencers:
+                    influenced[influencer] = self.parts[influencer]
+        return influenced
+
+
     @staticmethod
     def needed_tests(impacted_parts):
         tests = set([])
@@ -155,7 +168,11 @@ parser.add_argument('--dot', dest='dot_file',
                     help=("Generates dot file to be "
                           "used by graphwiz generator"))
 parser.add_argument('--changes', dest='changes', action="store_true",
-                    help="Formats output to be readable by human")
+                    help=("Input contains list of changed parts, and "
+                          "prints all parts influenced by this change set"))
+parser.add_argument('--influence', dest='influence', action="store_true",
+                    help=("Print out all parts that are influencing "
+                          "those specified."))
 parser.add_argument('inputs', nargs=argparse.REMAINDER)
 options = parser.parse_args()
 
@@ -174,3 +191,17 @@ if __name__ == "__main__":
             separator = ', '
         print("List of impacted parts: {0}".format(separator.join(impact)))
         print("Tests to run: {0}".format(separator.join(to_test)))
+    elif options.influence:
+        influence = project.influence(options.inputs)
+        print(influence)
+        if options.dot_file:
+            dot_string = project.generate_dot_string(influence, options.dot_file)
+        to_test = project.needed_tests(influence)
+        if options.nice_output:
+            separator = '\n'
+        else:
+            separator = ', '
+        print("List of influenced parts: {0}".format(separator.join(influence)))
+        print("Tests to run: {0}".format(separator.join(to_test)))
+    elif options.dot_file:
+        project.generate_dot_string(project.parts, options.dot_file)
