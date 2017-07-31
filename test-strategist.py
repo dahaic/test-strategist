@@ -80,15 +80,20 @@ class Project(object):
                    'EVERYTHING' in self.parts[part].influencers:
                     impacted_parts.add(part)
             prev_size = len(impacted_parts)
-        return impacted_parts
+        impacted = {}
+        for impacted_part in impacted_parts:
+            impacted[impacted_part] = self.parts[impacted_part]
+        return impacted
 
-    def needed_tests(self, impacted_parts):
+    @staticmethod
+    def needed_tests(impacted_parts):
         tests = set([])
-        for part in impacted_parts:
-            tests |= self.parts[part].tests
+        for part in impacted_parts.values():
+            tests |= part.tests
         return tests
 
-    def generate_dot_string(self, dot_file):
+    @staticmethod
+    def generate_dot_string(sub_parts, dot_file):
         def normalize(name):
             translation_table = string.maketrans(' -.|()*',
                                                  '_______')
@@ -96,24 +101,27 @@ class Project(object):
             return string.translate(new_name, translation_table)
 
         dot_string = 'strict digraph "influence map" {\n'
-        for part in self.parts:
-            if "EVERYTHING" in self.parts[part].influencers:
+        for part in sub_parts:
+            if "EVERYTHING" in sub_parts[part].influencers:
                 # let's make it special shape, and leave it as that
                 # arrows would be ugly
                 dot_string += "{0} [shape = box]".format(
-                                          normalize(self.parts[part].name))
+                                          normalize(sub_parts[part].name))
                 continue  # EVERYTHING means we are done
-            for influencer in self.parts[part].influencers:
+            for influencer in sub_parts[part].influencers:
                 try:
-                    self.parts[influencer].influencing |= set([part])
-                except AttributeError:
-                    self.parts[influencer].influencing = set([part])
+                    try:
+                        sub_parts[influencer].influencing |= set([part])
+                    except AttributeError:
+                        sub_parts[influencer].influencing = set([part])
+                except KeyError:
+                    continue
 
-        for part in self.parts:
-            part_display_name = normalize(self.parts[part].name)
+        for part in sub_parts:
+            part_display_name = normalize(sub_parts[part].name)
             try:
                 influencing_display_names = map(lambda x: normalize(x),
-                                                self.parts[part].influencing)
+                                                sub_parts[part].influencing)
                 if len(influencing_display_names) == 1:
                     dot_string += "{0} -> {1};\n".format(part_display_name,
                                            " ".join(influencing_display_names))
@@ -146,20 +154,23 @@ parser.add_argument('--nice', dest='nice_output', action="store_true",
 parser.add_argument('--dot', dest='dot_file',
                     help=("Generates dot file to be "
                           "used by graphwiz generator"))
-parser.add_argument('changes', nargs=argparse.REMAINDER)
+parser.add_argument('--changes', dest='changes', action="store_true",
+                    help="Formats output to be readable by human")
+parser.add_argument('inputs', nargs=argparse.REMAINDER)
 options = parser.parse_args()
 
 if __name__ == "__main__":
     project = Project()
     yaml_loader(options.project_file, project)
-    if options.dot_file:
-        dot_string = project.generate_dot_string(options.dot_file)
-        sys.exit()
-    impact = project.impact(options.changes)
-    to_test = project.needed_tests(impact)
-    if options.nice_output:
-        separator = '\n'
-    else:
-        separator = ', '
-    print("List of impacted parts: {0}".format(separator.join(impact)))
-    print("Tests to run: {0}".format(separator.join(to_test)))
+    if options.changes:
+        impact = project.impact(options.inputs)
+        print(impact)
+        if options.dot_file:
+            dot_string = project.generate_dot_string(impact, options.dot_file)
+        to_test = project.needed_tests(impact)
+        if options.nice_output:
+            separator = '\n'
+        else:
+            separator = ', '
+        print("List of impacted parts: {0}".format(separator.join(impact)))
+        print("Tests to run: {0}".format(separator.join(to_test)))
